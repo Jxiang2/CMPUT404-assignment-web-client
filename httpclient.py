@@ -20,7 +20,6 @@
 
 import sys
 import socket
-import re
 # you may use urllib to encode data appropriately
 import urllib.parse
 
@@ -33,29 +32,23 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
+    def get_host_port(self, url):
+        [host, port] = [None, None]
+        #get host
+        if urllib.parse.urlparse(url).hostname != None:
+            #print(urllib.parse.urlparse(url).hostname)
+            host = urllib.parse.urlparse(url).hostname
+        else:
+            host = "http://127.0.0.1"
 
-    def connect(self, host, port):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((host, port))
-        return None
+        #get port
+        if urllib.parse.urlparse(url).port != None:
+            #print(urllib.parse.urlparse(url).port)
+            port = urllib.parse.urlparse(url).port
+        else:
+            port = 80
+        return [host, port]
 
-    def get_code(self, data):
-        return None
-
-    def get_headers(self,data):
-        return None
-
-    def get_body(self, data):
-        return None
-    
-    def sendall(self, data):
-        self.socket.sendall(data.encode('utf-8'))
-        
-    def close(self):
-        self.socket.close()
-
-    # read everything from the socket
     def recvall(self, sock):
         buffer = bytearray()
         done = False
@@ -65,17 +58,98 @@ class HTTPClient(object):
                 buffer.extend(part)
             else:
                 done = not part
-        return buffer.decode('utf-8')
+        return buffer.decode('utf-8')    
+
+
+    def connect(self, host, port):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((host, port))
+        return None
+
+    def get_code(self, data):
+        status_code = data.split(" ")[1]
+        return int(status_code)
+
+    def get_headers(self,data):
+        header = data.split("\r\n\r\n")[0]
+        return header
+
+    def get_body(self, data):
+        body = data.split("\r\n\r\n")[1]
+        return body
+
+    
+    def sendall(self, data):
+        self.socket.sendall(data.encode('utf-8'))
+        
+    def close(self):
+        self.socket.close()
+
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
-        return HTTPResponse(code, body)
+        try:
+            path = urllib.parse.urlparse(url).path if urllib.parse.urlparse(url).path != "" else "/"
+            #print("path: " ,path)
+            [host, port] = self.get_host_port(url)
+            connection = "Connection: close\r\n\r\n"
+            payload = "GET" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + host + "\r\n" + connection
+            self.connect(host, port)
+            self.sendall(payload)
+            data = self.recvall(self.socket)
+            #print out data
+            print("##########")
+            print("DATA: \n", data)
+            print("##########")
+            status_code = self.get_code(data)
+            print("code: ", status_code)
+            body = self.get_body(data)
+            self.close()
+
+        except ConnectionRefusedError:
+            response = HTTPResponse(code=404, body= {" "})
+            return response
+
+        return HTTPResponse(status_code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
-        return HTTPResponse(code, body)
+        try:
+            path = urllib.parse.urlparse(url).path if urllib.parse.urlparse(url).path != "" else "/"
+            [host, port] = self.get_host_port(url)
+            connection = "Conntection: close \r\n"
+            payload = ""
+
+            if args != None:
+                message = urllib.parse.urlencode(args)
+                content_length = "Content-length: " + str(len(message)) + "\r\n"
+                payload = "POST" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + \
+                    host + "\r\n" + content_length + connection + "\r\n" + urllib.parse.urlencode(args)
+                #print out payload
+                print("##########")
+                print("PAYLOAD: \n", payload)
+                print("##########")
+
+            else:
+                content_length = "Content-length: " + str(0) + "\r\n"
+                payload = "POST" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + \
+                    host + "\r\n" + content_length + connection + "\r\n"
+                #print out payload
+                print("##########")
+                print("PAYLOAD: \n", payload)
+                print("##########")
+
+
+            self.connect(host, port)
+            self.sendall(payload)
+            data = self.recvall(self.socket)
+            status_code = self.get_code(data)
+            body = self.get_body(data)
+            self.close()
+            
+        except ConnectionRefusedError:
+            response = HTTPResponse(code=404, body= {" "})
+            return response
+
+        return HTTPResponse(status_code, body)
 
     def command(self, url, command="GET", args=None):
         if (command == "POST"):
