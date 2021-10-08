@@ -85,6 +85,17 @@ class HTTPClient(object):
     def close(self):
         self.socket.close()
 
+    def interact(self, host, port, payload):
+        self.connect(host, port)
+        self.sendall(payload)
+        data = self.recvall(self.socket)
+        status_code = self.get_code(data)
+        print("code: ", status_code)
+        body = self.get_body(data)
+        self.close()
+
+        return status_code, body
+
 
     def GET(self, url, args=None):
         try:
@@ -93,22 +104,11 @@ class HTTPClient(object):
             [host, port] = self.get_host_port(url)
             connection = "Connection: close\r\n\r\n"
             payload = "GET" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + host + "\r\n" + connection
-            self.connect(host, port)
-            self.sendall(payload)
-            data = self.recvall(self.socket)
-            #print out data
-            print("##########")
-            print("DATA: \n", data)
-            print("##########")
-            status_code = self.get_code(data)
-            print("code: ", status_code)
-            body = self.get_body(data)
-            self.close()
+            status_code, body = self.interact(host, port, payload)
 
         except ConnectionRefusedError:
             response = HTTPResponse(code=404, body= {" "})
             return response
-
         return HTTPResponse(status_code, body)
 
     def POST(self, url, args=None):
@@ -123,32 +123,16 @@ class HTTPClient(object):
                 content_length = "Content-length: " + str(len(message)) + "\r\n"
                 payload = "POST" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + \
                     host + "\r\n" + content_length + connection + "\r\n" + urllib.parse.urlencode(args)
-                #print out payload
-                print("##########")
-                print("PAYLOAD: \n", payload)
-                print("##########")
-
             else:
                 content_length = "Content-length: " + str(0) + "\r\n"
                 payload = "POST" + " " + path + " " + "HTTP/1.1\r\n" + "Host:" + \
                     host + "\r\n" + content_length + connection + "\r\n"
                 #print out payload
-                print("##########")
-                print("PAYLOAD: \n", payload)
-                print("##########")
-
-
-            self.connect(host, port)
-            self.sendall(payload)
-            data = self.recvall(self.socket)
-            status_code = self.get_code(data)
-            body = self.get_body(data)
-            self.close()
+            status_code, body = self.interact(host, port, payload)
             
         except ConnectionRefusedError:
             response = HTTPResponse(code=404, body= {" "})
             return response
-
         return HTTPResponse(status_code, body)
 
     def command(self, url, command="GET", args=None):
